@@ -7,11 +7,11 @@ Inev read the file, and parse the hexadecimal code of it, and search for the pat
 ## COMPILE:
 
 ### With The Makefile:
-´´´Make´´´
+```make```
 
 #### With simple commands:
-gcc -o encoder encoder.c suffix_tree.c -lssl -lcrypto -Wall
-gcc -o decoder decoder.c -lssl -lcrypto -Wall
+```gcc -o encoder encoder.c suffix_tree.c -lssl -lcrypto -Wall ```
+```gcc -o decoder decoder.c -lssl -lcrypto -Wall```
 
 # Use of the encoder:
 
