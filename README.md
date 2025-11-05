@@ -4,16 +4,22 @@ Inev read the file, and parse the hexadecimal code of it, and search for the pat
 
 # How to use:
 
-## COMPILE:
+## COMPILE
 
-### With The Makefile:
+### With The Makefile
+You can compile with the command:
+
 ```make```
+And clean with:
+```make clean```
 
-#### With simple commands:
+#### With simple commands
+You can compile using these commands:
+
 ```gcc -o encoder encoder.c suffix_tree.c -lssl -lcrypto -Wall ```
 ```gcc -o decoder decoder.c -lssl -lcrypto -Wall```
 
-# Use of the encoder:
+# Use of the encoder
 
 ## Base syntax:
 ./encoder [--strict] <secret_file> <carrier1> <carrier2> ...
@@ -25,7 +31,6 @@ Inev read the file, and parse the hexadecimal code of it, and search for the pat
 ./encoder --strict my_secret.txt <carrier1> <carrier2> ...
 
 ## Use of the decoder:
-
 ./decoder -m map.txt -o secret_file.txt <carriers> (or path to the carriers) /path/to/the/carriers/*
 
 ## Advanced use of the bash
