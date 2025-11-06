@@ -21,15 +21,15 @@ OBJS_DECODER = $(SRCS_DECODER:.c=.o)
 all: $(TARGETS)
 
 encoder: $(OBJS_ENCODER)
-	@echo "Linkando o executável: $@"
+	@echo "Linking the executable$@"
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 decoder: $(OBJS_DECODER)
-	@echo "Linkando o executável: $@"
+	@echo "Linking the executable...$@"
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c
-	@echo "Compilando: $<"
+	@echo "Compiling..."
 	$(CC) $(CFLAGS) -c $< -o $@ -MMD
 
 .PHONY: clean all
