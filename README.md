@@ -2,6 +2,9 @@
 This is a simple code, where you have a "secret file" that you want to share with other people, but in a constantly atteckd web and security word by hackers and bad-intentioned people, you can "encrypt" your file using the inev.
 Inev read the file, and parse the hexadecimal code of it, and search for the pattern in other file, then write where it is, but sometimes it can't find, so he writes the hexa down, but to avoid this you can use the strict flag, so if it didn't find, the code stops.
 
+# Ethics
+Read the [**ETHICAL_LICENSE.md**](./ETHICAL_LICENSE.md) to see the Ethical License of inev, further questions should be adressed to the email lucasplaygaemes@gmail.com
+
 # How to use:
 
 ## COMPILE
