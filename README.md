@@ -13,13 +13,16 @@ Read the [**ETHICAL_LICENSE.md**](./ETHICAL_LICENSE.md) to see the Ethical Licen
 You can compile with the command:
 
 ```make```
+
 And clean with:
+
 ```make clean```
 
 #### With simple commands
 You can compile using these commands:
 
 ```gcc -o encoder encoder.c suffix_tree.c -lssl -lcrypto -Wall ```
+
 ```gcc -o decoder decoder.c -lssl -lcrypto -Wall```
 
 # Use of the encoder
