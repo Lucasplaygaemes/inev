@@ -1,8 +1,8 @@
-LIDEC ETHICAL LICENSE v1.0
+INEV ETHICAL LICENSE v1.0
 EFFECTIVE DATE: 05/11/2025
 AUTHOR: lucasplaygaemes
 ## PREAMBLE
-This license aims to permit legitimate use of LIDEC software while explicitly preventing unethical and illegal uses. The software is provided primarily for academic research and legitimate data protection.
+This license aims to permit legitimate use of INEV software while explicitly preventing unethical and illegal uses. The software is provided primarily for academic research and legitimate data protection.
 ## RIGHTS GRANTED
 1. **Use**: You may use the software for educational, research, and legitimate data protection purposes.
 2. **Modification**: You may modify the source code for improvements or academic research.
@@ -36,8 +36,7 @@ This license aims to permit legitimate use of LIDEC software while explicitly pr
    - Damages caused by the tool
 ## GENERAL PROVISIONS
 8.1 **Severability**: If any provision is invalid, the remainder remains enforceable.
-8.2 **Jurisdiction**: Any disputes will be resolved under the laws of [Your Country].
-8.3 **License Version**: This is version 1.0 of the LIDEC Ethical License.
+8.2 **Jurisdiction**: Any disputes will be resolved under the laws of Brazil.
+8.3 **License Version**: This is version 1.0 of the INEV Ethical License.
 ---
 **FINAL WARNING: BY USING THIS SOFTWARE, YOU AGREE TO ALL TERMS ABOVE AND ASSUME FULL RESPONSIBILITY FOR YOUR USE.**
-
