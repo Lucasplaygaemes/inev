@@ -5,7 +5,7 @@ Inev read the file, and parse the hexadecimal code of it, and search for the pat
 # Ethics
 Read the [**ETHICAL_LICENSE.md**](./ETHICAL_LICENSE.md) to see the Ethical License of inev, further questions should be adressed to the email lucasplaygaemes@gmail.com
 
-# How to use:
+# How to use
 
 ## COMPILE
 
@@ -27,22 +27,22 @@ You can compile using these commands:
 
 # Use of the encoder
 
-## Base syntax:
+## Base syntax
 ./encoder [--strict] <secret_file> <carrier1> <carrier2> ...
 
-### Example (Normal Mode - recommended):
+### Example (Normal Mode - recommended)
 ./encoder my_secret.txt /path/to/carriers/*
 
 ### Strict mode example (Fails if do not find 100% matchs)
 ./encoder --strict my_secret.txt <carrier1> <carrier2> ...
 
-## Use of the decoder:
+## Use of the decoder
 ./decoder -m map.txt -o secret_file.txt <carriers> (or path to the carriers) /path/to/the/carriers/*
 
 ## Advanced use of the bash
 shopt -s globstar extglob
 
-## Recursive Exemple:
+## Recursive Exemple
 ./encoder secret.txt /home/user/docs/**
 
 Exclusion Example:
