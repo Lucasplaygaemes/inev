@@ -32,15 +32,15 @@ struct Carrier {
 };
 
 int encrypt_file(const char* filepath) {
-    char *password = getpass("Digite a senha para criptografar o mapa: ");
-    if (!password || strlen(password) == 0) { fprintf(stderr, "\nSenha vazia. Criptografia cancelada.\n"); return -1; }
+    char *password = getpass("Insert the password to encrypt the map file. ");
+    if (!password || strlen(password) == 0) { fprintf(stderr, "\nEmpty password. Encripyting failed.\n"); return -1; }
     FILE* in_file = fopen(filepath, "rb");
-    if (!in_file) { perror("Nao foi possivel reabrir o arquivo de mapa para criptografia"); return -1; }
+    if (!in_file) { perror("Was not possible to re-open the map file."); return -1; }
     fseek(in_file, 0, SEEK_END);
     long plaintext_len = ftell(in_file);
     fseek(in_file, 0, SEEK_SET);
     unsigned char* plaintext = malloc(plaintext_len);
-    if (!plaintext) { perror("Erro de alocacao de memoria"); fclose(in_file); return -1; }
+    if (!plaintext) { perror("Error allocating memory."); fclose(in_file); return -1; }
     fread(plaintext, 1, plaintext_len, in_file);
     fclose(in_file);
     unsigned char salt[SALT_SIZE];
@@ -67,14 +67,14 @@ int encrypt_file(const char* filepath) {
     fwrite(ciphertext, 1, ciphertext_len, out_file);
     fclose(out_file);
     free(ciphertext);
-    printf("\nArquivo de mapa '%s' criptografado com sucesso.\n", filepath);
+    printf("\nMap file '%s' sucessfully encrpyted.\n", filepath);
     return 0;
 }
 
 char* read_file_to_buffer(const char* filename, size_t* out_size) {
     struct stat statbuf;
     if (stat(filename, &statbuf) != 0 || !S_ISREG(statbuf.st_mode)) {
-        return NULL; // Nao e um arquivo regular ou falha no stat
+        return NULL; // isn't a regular file or stat fail
     }
     *out_size = statbuf.st_size;
     FILE* file = fopen(filename, "rb");
@@ -139,20 +139,20 @@ int main(int argc, char* argv[]) {
         else args[arg_count++] = argv[i];
     }
 
-    if (arg_count < 2) { fprintf(stderr, "Uso: %s [--strict] <arquivo_secreto> <transportador1> ...\n", argv[0]); free(args); return 1; }
-    if (strict_mode) printf("--- Rodando em Modo Estrito ---\n");
+    if (arg_count < 2) { fprintf(stderr, "Use: %s [--strict] <secret_file> <carrier1> ...\n", argv[0]); free(args); return 1; }
+    if (strict_mode) printf("--- Running strict mode ---\n");
 
     const char* secret_filename = args[0];
-    const char* map_filename = "mapa.txt";
+    const char* map_filename = "map.txt";
     size_t secret_size;
     char* secret_data = read_file_to_buffer(secret_filename, &secret_size);
-    if (!secret_data) { perror("Nao foi possivel ler o arquivo secreto"); free(args); return 1; }
+    if (!secret_data) { perror("Wasn't possible to read the secret file"); free(args); return 1; }
 
     int num_carriers = arg_count - 1;
-    if (num_carriers > 65535) { fprintf(stderr, "Erro: Limite de 65535 transportadores excedido.\n"); return 1; }
+    if (num_carriers > 65535) { fprintf(stderr, "Error: Limit of 65535 rechean.\n"); return 1; }
     struct Carrier* carriers = malloc(num_carriers * sizeof(struct Carrier));
 
-    printf("--- Carregando e indexando arquivos transportadores... ---\n");
+    printf("--- Loading and indexing carries files... ---\n");
     for (int i = 0; i < num_carriers; i++) {
         carriers[i].filename = args[i + 1];
         carriers[i].data = NULL;
@@ -163,15 +163,15 @@ int main(int argc, char* argv[]) {
         
         carriers[i].data = read_file_to_buffer(carriers[i].filename, &carriers[i].size);
         if (!carriers[i].data) {
-            fprintf(stderr, "Aviso: Nao foi possivel ler o transportador %s, sera ignorado.\n", carriers[i].filename);
+            fprintf(stderr, "Warning: Wasn't possibel to read the %s file, will be ignored.\n", carriers[i].filename);
             continue;
         }
         
-        printf("  - Carregado: %s (%zu bytes)\n", carriers[i].filename, carriers[i].size);
-        carriers[i].engine = ENGINE_SUFFIX_TREE; // Tenta usar a arvore primeiro
+        printf("  - Loading: %s (%zu bytes)\n", carriers[i].filename, carriers[i].size);
+        carriers[i].engine = ENGINE_SUFFIX_TREE; // Try to use the tree firts
         carriers[i].index.tree = st_create(carriers[i].data, carriers[i].size);
         if (!carriers[i].index.tree) {
-            fprintf(stderr, "    Aviso: Falha na arvore de sufixos (arquivo incompativel?), usando motor seguro.\n");
+            fprintf(stderr, "    Warning: Fail in the tree suffix (incompatible file?), using secure motor.\n");
             carriers[i].engine = ENGINE_SAFE_SEARCH;
         }
     }
@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    printf("--- Iniciando Busca Gulosa Hibrida ---\n");
+    printf("--- Initiating Hybrid Greedy Search ---\n");
     unsigned char literal_buffer[127];
     int literal_count = 0;
     long long total_bytes_processed = 0;
@@ -232,7 +232,7 @@ int main(int argc, char* argv[]) {
             i += best_match_len;
         } else {
             if (strict_mode) {
-                fprintf(stderr, "\n\nErro Fatal (Modo Estrito): Nao foi possivel encontrar correspondencia para o byte na posicao %zu.\n", i);
+                fprintf(stderr, "\n\nFatal Error (Strict mode): Was not possible to find a correspondet byte for the position %zu.\n", i);
                 fclose(map_file); remove(map_filename); free(secret_data);
                 for (int k = 0; k < num_carriers; k++) {
                     if(carriers[k].data) { free(carriers[k].data); if(carriers[k].engine == ENGINE_SUFFIX_TREE && carriers[k].index.tree) st_free(carriers[k].index.tree); }
@@ -254,10 +254,10 @@ int main(int argc, char* argv[]) {
 
     flush_literal_buffer(map_file, literal_buffer, &literal_count);
     fclose(map_file);
-    printf("\n--- Processo de Mapeamento Concluido ---\n");
+    printf("\n--- Maping Process Finished ---\n");
 
     if (encrypt_file(map_filename) != 0) {
-        fprintf(stderr, "Falha ao criptografar o arquivo de mapa.\n");
+        fprintf(stderr, "Error encrypting the map file.\n");
     }
 
     free(secret_data);
