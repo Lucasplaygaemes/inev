@@ -1,6 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <unistd.h>
+#endif
+
+
 #include <stdint.h>
 #include <sys/stat.h>
 #include <stdbool.h>
@@ -8,7 +17,7 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
-#include <unistd.h> // Para getpass
+
 
 #define MIN_MATCH_LEN 8
 #define SALT_SIZE 16
@@ -30,6 +39,28 @@ struct Carrier {
         SuffixTree* tree;
     } index;
 };
+
+
+#ifdef _WIN32
+char *getpass(const char *prompt) {
+	static char password[128];
+	int i = 0;
+	int ch;
+
+	fprintf(stderr, "%s", prompt);
+
+	while ((ch = _getch()) != '\r') {
+		if (ch == '\b') {
+			if (i > 0) i--;
+		} else if (i < (int)sizeof(password) - 1) {
+			password[i++] = (char)ch;
+		}
+	}
+	password[i] = '\0';
+	fprintf(stderr, "\n");
+	return password;
+}
+#endif
 
 int encrypt_file(const char* filepath) {
     char *password = getpass("Insert the password to encrypt the map file. ");

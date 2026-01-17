@@ -8,12 +8,42 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 
+
+
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <unistd.h>
+#endif
+
+
 #define SALT_SIZE 16
 #define KEY_SIZE 32 // AES-256
 #define IV_SIZE 16  // AES block size
 #define MAP_VERSION 2
 
 // --- Funcoes Auxiliares ---
+
+#ifdef _WIN32
+char *getpass(const char *prompt) {
+	static char password[128];
+	int i = 0;
+	int ch;
+
+	fprintf(stderr, "%s", prompt);
+
+	while ((ch = _getch()) != '\r') {
+		if (ch == '\b') {
+			if (i > 0) i--;
+		} else if (i < (int)sizeof(password) - 1) {
+			password[i++] = (char)ch;
+		}
+	}
+	password[i] = '\0';
+	fprintf(stderr, "\n");
+	return password;
+}
+#endif
 
 unsigned char* decrypt_map_to_memory(const char* filepath, long* out_map_size) {
     char *password = getpass("Digite a senha para descriptografar o mapa: ");
