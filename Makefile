@@ -1,4 +1,6 @@
 CC = gcc
+CFLAGS  += -I/mingw64/include
+LDFLAGS += -L/mingw64/lib -lssl -lcrypto
 
 CFLAGS = -Wall -g -I./source
 
