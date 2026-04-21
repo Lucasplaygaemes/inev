@@ -4,7 +4,7 @@ LDFLAGS += -L/mingw64/lib -lssl -lcrypto
 
 CFLAGS = -Wall -g -I./source
 
-LDFLAGS = -lssl -lcrypto
+LDFLAGS = -lssl -lcrypto -lz
 
 # --- Targets ---
 
