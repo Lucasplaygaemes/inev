@@ -184,9 +184,10 @@ int main(int argc, char* argv[]) {
     int num_secrets = 0;
     const char *carrier_names[100];
     int num_carriers = 0;
+    bool strict_mode = false;
     int opt;
     
-    while ((opt = getopt(argc, argv, "s:c:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:c:x")) != -1) {
         switch (opt) {
             case 's':
                 if (num_secrets < 100) {
@@ -205,13 +206,19 @@ int main(int argc, char* argv[]) {
                     carrier_names[num_carriers++] = optarg;
                 }
                 break;
+            case 'x':
+                strict_mode = true;
+                break;
         }
     }
 
     if (num_secrets == 0 || num_carriers == 0) {
-        fprintf(stderr, "Use: %s -s <secret1> [-s <secret2>] -c <carrier1> [-c <carrier2>]\n", argv[0]);
+        fprintf(stderr, "Use: %s -s <secret1> [-s <secret2>] -c <carrier1> [-c <carrier2>] [-x]\n", argv[0]);
+        fprintf(stderr, "Flags:\n  -s: Secret file\n  -c: Carrier file\n  -x: Strict mode (fails if no match found)\n");
         return 1;
     }
+
+    if (strict_mode) printf("--- Running in STRICT mode ---\n");
 
     struct Carrier* carriers = malloc(num_carriers * sizeof(struct Carrier));
     for (int i = 0; i < num_carriers; i++) {
@@ -281,6 +288,12 @@ int main(int argc, char* argv[]) {
                 fwrite(&length16, sizeof(uint16_t), 1, map_file);
                 i += best_match_len;
             } else {
+                if (strict_mode) {
+                    fprintf(stderr, "\nSTRICT MODE ERROR: No match for byte at position %zu in secret %d.\n", i, s);
+                    fclose(map_file);
+                    remove(map_filename);
+                    return 1;
+                }
                 literal_buffer[literal_count++] = remaining_secret[0];
                 i++;
                 if (literal_count == 16384) flush_literal_buffer(map_file, literal_buffer, &literal_count, (uint16_t)s);
