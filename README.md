@@ -1,75 +1,87 @@
-# Inev - The Chameleon Steganography & Mapping Tool
+# Inev
 
-Inev is a high-performance mapping tool designed to "hide" secret files by reconstructing them using patterns found in other files (carriers). Unlike traditional encryption, Inev creates a "map" that points to coordinates in files you already have, making your data nearly invisible and deniable.
+**Inev** is not just an encryption tool; it is a **data reconstruction engine**. It allows you to "hide" files by deconstructing them into a series of mathematical coordinates that point to data already existing in other files on your system (Videos, ISOs, Games, etc.).
 
-## How it works?
-Inev uses a **Hybrid Greedy Search** powered by a **Suffix Tree** to find the longest possible matches between your secret and your carrier files.
-
-1.  **Mapping:** It identifies sequences in carriers that match your secret.
-2.  **Chameleon System:** Hide multiple secrets in one map. Each instruction is tagged to a specific file.
-3.  **Zero-Knowledge (Strict Mode):** With the `-x` flag, the map contains **zero** bytes of your original data—only coordinates.
-4.  **Global Compression:** The map is compressed with Zlib before encryption.
-5.  **Hardened Security:** AES-256-CBC encryption with PBKDF2-HMAC-SHA256 derivation (**600,000 iterations**).
-
-## Ethics
-Read the [**ETHICAL_LICENSE.md**](./ETHICAL_LICENSE.md). For questions: lucasplaygaemes@gmail.com
+The result is a **Map File** that contains zero bytes of your original secret, making it technically impossible to recover without both the **Map** AND the original **Carrier Files**.
 
 ---
 
-## Installation & Compilation
+### 1. High-Performance Mapping (Suffix Tree)
+Inev uses a **Suffix Tree** algorithm (Ukkonen's based) to index carrier files in $O(N)$ time. 
+*   **Greedy Match Logic:** For every byte of your secret, Inev finds the longest possible sequence present in your carriers.
+*   **Data Pointer System:** Instead of storing your data, the map stores: `[Carrier_ID, Offset, Length]`.
+
+### 2. Chameleon Multi-Secret System
+You can map **multiple secrets** (e.g., a PDF, a ZIP, and a Key) into a **single map file**. 
+*   **Selective Recovery:** If you only provide some of the carriers to the decoder, only the secrets that "belong" to those carriers will be reconstructed. The others remain invisible/corrupted.
+
+### 3. Security Architecture
+*   **Encryption:** AES-256-CBC.
+*   **Key Derivation:** PBKDF2-HMAC-SHA256 with **600,000 iterations** and a unique salt.
+*   **Compression:** The entire map is Zlib-compressed before encryption to minimize size and eliminate data patterns.
+*   **Integrity:** The map stores SHA256 hashes of every carrier used, ensuring you never reconstruct using the wrong file version.
+
+### 4. Robust Steganography Suite
+Inev can hide its maps inside other files using two advanced methods:
+*   **Append (Overlay):** Stealthily attaches the map to the end of any file (works for images, videos, executables).
+*   **Robust Randomized LSB:** Hides data inside the Least Significant Bits of BMP images.
+    *   **Xorshift32 PRNG:** Bits are not stored in order; they are scattered across the image based on a pseudo-random sequence generated from your **password**.
+    *   **Tail-Noise Resistance:** A dedicated `Size Field` in the header prevents extraction errors caused by file-end garbage.
+
+---
+
+#Advanced Features & Flags
+
+| Flag | Name | Description |
+| :--- | :--- | :--- |
+| `-s` | **Secret** | Path to the file you want to hide (supports multiple). |
+| `-c` | **Carrier** | Path to the "source of patterns" (supports multiple). |
+| `-x` | **Strict Mode** | **No-Literal Guarantee**. The process fails if it can't find matches for every byte. The map will contain 0% of your original data. |
+| `-a` | **Analyze** | Compatibility check. Shows what % of your secret can be covered by the chosen carriers before you commit to a map. |
+| `-H` | **Hunter** | **Multicore Search**. Scans a directory and ranks files by how well they match your secret (ordered by coverage %). |
+| `-e` | **Append** | Embeds the map as a hidden overlay in a host file. |
+| `-l` | **Robust LSB**| Scatters the map bits invisibly inside a BMP image using password-seeded randomization. |
+
+---
+
+## Practical Examples
+
+### Scenario A: The Ghost Map (Strict Mode)
+You want to hide a password list using a game ISO as a carrier. You want to ensure NO part of the passwords exists in the map file.
+```bash
+./encoder -s passwords.txt -c game_data.iso -x
+```
+
+### Scenario B: The Invisible Image (Robust LSB)
+You want to hide a secret archive inside a family photo, scattered so well that even statistical analysis can't find it.
+```bash
+./encoder -s backup.zip -c movie.mp4 -l photo.bmp
+```
+*Inev will ask for a password. This password will both encrypt the data and decide the "scattering pattern" of the bits.*
+
+### Scenario C: Finding the Best Carrier
+You have a 1GB secret and don't know which file to use as a carrier.
+```bash
+./encoder -s big_secret.bin -H /home/user/Downloads/
+```
+
+---
+
+## Installation
 
 ### Dependencies
-- OpenSSL (libssl-dev)
-- Zlib (zlib1g-dev)
+- **OpenSSL** (`libssl-dev`)
+- **Zlib** (`zlib1g-dev`)
+- **GCC** & **Make**
 
-### Compiling
+### Compilation
 ```bash
-make
+make clean && make
 ```
 
 ---
 
-## How to Use
+## ⚖ Ethics & License
+This tool was created for educational purposes regarding data reconstruction and steganography. Please refer to [**ETHICAL_LICENSE.md**](./ETHICAL_LICENSE.md) for usage terms.
 
-### 1. Encoding (Creating a Map)
-The encoder uses flags for secrets (`-s`) and carriers (`-c`).
-
-**Syntax:**
-```bash
-./encoder -s <secret1> [-s <secret2>] -c <carrier1> [-c <carrier2>] [-x]
-```
-
-**Flags:**
-*   `-s`: Path to a secret file.
-*   `-c`: Path to a carrier file.
-*   `-x`: **Strict Mode**. The process fails if a match shorter than 16 bytes is found. This ensures the map contains **no literal data**, only pointers.
-
-**Example (Advanced Chameleon):**
-```bash
-./encoder -s passwords.txt -s backup.zip -c movie.mp4 -c family_photo.jpg -x
-```
-
-### 2. Decoding (Recovering Files)
-The decoder generates `recovered_0.bin`, `recovered_1.bin`, etc.
-
-**Syntax:**
-```bash
-./decoder -m <map_file> -c <carrier1> [-c <carrier2>] ...
-```
-
----
-
-## Advanced Features
-
-### Deniable Encryption & Selective Recovery
-The Chameleon System allows for "Partial Recovery". If you create a map using two carriers (A and B) for two different secrets:
-- Providing **Carrier A** to the decoder will recover **Secret A** perfectly.
-- **Secret B** will be corrupted or empty because its "pieces" (stored in Carrier B) are missing.
-
-This allows you to reveal only what you want, depending on which carriers you provide.
-
-### Strict Mode (-x) for Maximum Privacy
-Without `-x`, Inev saves "literal bytes" for patterns it can't find in carriers. While these are encrypted, they still exist in the map. **With `-x`**, Inev is forced to find everything in the carriers. If it can't, it fails. This guarantees that your map is purely a set of coordinates, containing no traces of your original file's content.
-
-### Performance Tip
-Use large, high-entropy files as carriers (Video files, ISOs, or Game assets) to increase the chance of long matches and smaller maps.
+**Author:** Lucas (lucasplaygaemes@gmail.com)
