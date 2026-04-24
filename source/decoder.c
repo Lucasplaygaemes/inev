@@ -16,221 +16,132 @@
 #endif
 
 #define SALT_SIZE 16
-#define KEY_SIZE 32 // AES-256
-#define IV_SIZE 16  // AES block size
+#define KEY_SIZE 32 
+#define IV_SIZE 16  
 #define MAP_VERSION 3
+
+uint32_t xorshift32(uint32_t *state) {
+    uint32_t x = *state;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    if (x == 0) x = 1;
+    return (*state = x);
+}
 
 #ifdef _WIN32
 char *getpass(const char *prompt) {
     static char password[128];
-    int i = 0;
-    int ch;
+    int i = 0, ch;
     fprintf(stderr, "%s", prompt);
     while ((ch = _getch()) != '\r') {
-        if (ch == '\b') {
-            if (i > 0) i--;
-        } else if (i < (int)sizeof(password) - 1) {
-            password[i++] = (char)ch;
-        }
+        if (ch == '\b') { if (i > 0) i--; }
+        else if (i < 127) password[i++] = (char)ch;
     }
-    password[i] = '\0';
-    fprintf(stderr, "\n");
+    password[i] = '\0'; fprintf(stderr, "\n");
     return password;
 }
 #endif
 
-unsigned char* decrypt_map_to_memory(const char* filepath, long* out_map_size) {
-    char *password = getpass("Digite a senha para descriptografar o mapa: ");
-    if (!password || strlen(password) == 0) {
-        fprintf(stderr, "\nSenha vazia. Descriptografia cancelada.\n");
-        return NULL;
+unsigned char* extract_lsb_robust(const char* path, const char* pass, size_t* out_sz) {
+    struct stat st; if (stat(path, &st) != 0) return NULL;
+    FILE* f = fopen(path, "rb"); if (!f) return NULL;
+    unsigned char* h = malloc(st.st_size); fread(h, 1, st.st_size, f); fclose(f);
+    uint32_t off = (st.st_size > 54 && h[0]=='B' && h[1]=='M') ? *(uint32_t*)(h+10) : 0;
+    size_t avail = st.st_size - off;
+    if (avail < 100) { free(h); return NULL; }
+    uint32_t seed = 0; unsigned char hash[32];
+    PKCS5_PBKDF2_HMAC(pass, strlen(pass), (unsigned char*)"INEV_SEED", 9, 1000, EVP_sha256(), 32, hash);
+    memcpy(&seed, hash, 4); if (seed == 0) seed = 1;
+    uint32_t *idx = malloc(avail * sizeof(uint32_t));
+    for (uint32_t i = 0; i < avail; i++) idx[i] = i;
+    for (uint32_t i = avail - 1; i > 0; i--) {
+        uint32_t j = xorshift32(&seed) % (i + 1);
+        uint32_t tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
     }
-
-    FILE* in_file = fopen(filepath, "rb");
-    if (!in_file) { perror("Nao foi possivel abrir o arquivo de mapa"); return NULL; }
-
-    char magic[8];
-    if (fread(magic, 1, 8, in_file) != 8 || strncmp(magic, "LIDECENC", 8) != 0) {
-        fprintf(stderr, "Erro: Arquivo de mapa invalido ou nao esta criptografado.\n");
-        fclose(in_file);
-        return NULL;
+    size_t m_sz = avail / 8;
+    unsigned char* m = malloc(m_sz);
+    for (size_t i = 0; i < m_sz; i++) {
+        m[i] = 0;
+        for (int b = 0; b < 8; b++) m[i] |= (h[off + idx[i*8 + b]] & 0x01) << (7-b);
     }
-
-    unsigned char salt[SALT_SIZE];
-    if (fread(salt, 1, sizeof(salt), in_file) != sizeof(salt)) { fprintf(stderr, "Erro ao ler o sal do mapa.\n"); fclose(in_file); return NULL; }
-
-    fseek(in_file, 0, SEEK_END);
-    long file_size = ftell(in_file);
-    long ciphertext_len = file_size - (sizeof(salt) + 8);
-    if (ciphertext_len <= 0) { fprintf(stderr, "Erro: Mapa corrompido.\n"); fclose(in_file); return NULL; }
-    fseek(in_file, sizeof(salt) + 8, SEEK_SET);
-
-    unsigned char* ciphertext = malloc(ciphertext_len);
-    if (!ciphertext) { perror("Erro de alocacao"); fclose(in_file); return NULL; }
-    if (fread(ciphertext, 1, ciphertext_len, in_file) != ciphertext_len) { fprintf(stderr, "Erro ao ler mapa.\n"); fclose(in_file); free(ciphertext); return NULL; }
-    fclose(in_file);
-
-    unsigned char key[KEY_SIZE], iv[IV_SIZE], derived_bytes[KEY_SIZE + IV_SIZE];
-    if (PKCS5_PBKDF2_HMAC(password, strlen(password), salt, sizeof(salt), 600000, EVP_sha256(), sizeof(derived_bytes), derived_bytes) == 0) { free(ciphertext); return NULL; }
-    memcpy(key, derived_bytes, sizeof(key));
-    memcpy(iv, derived_bytes + sizeof(key), sizeof(iv));
-
-    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
-
-    unsigned char* plaintext = malloc(ciphertext_len + IV_SIZE);
-    if (!plaintext) { free(ciphertext); EVP_CIPHER_CTX_free(ctx); return NULL; }
-    
-    int len, plaintext_len = 0;
-    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) { 
-        fprintf(stderr, "Erro: Falha ao descriptografar.\n"); 
-        free(ciphertext); free(plaintext); EVP_CIPHER_CTX_free(ctx); return NULL; 
-    }
-    plaintext_len = len;
-
-    if (EVP_DecryptFinal_ex(ctx, plaintext + len, &len) != 1) { 
-        fprintf(stderr, "Erro: Senha incorreta ou mapa corrompido.\n"); 
-        free(ciphertext); free(plaintext); EVP_CIPHER_CTX_free(ctx); return NULL; 
-    }
-    plaintext_len += len;
-
-    EVP_CIPHER_CTX_free(ctx);
-    free(ciphertext);
-
-    if (plaintext_len < (int)sizeof(uint32_t)) { free(plaintext); return NULL; }
-    uint32_t original_size;
-    memcpy(&original_size, plaintext, sizeof(uint32_t));
-    
-    unsigned char *compressed_ptr = plaintext + sizeof(uint32_t);
-    int compressed_size = plaintext_len - sizeof(uint32_t);
-    
-    unsigned char *final_map = malloc(original_size);
-    uLongf dest_len = original_size;
-    if (uncompress(final_map, &dest_len, compressed_ptr, compressed_size) != Z_OK) {
-        fprintf(stderr, "Erro ao descompactar o mapa.\n");
-        free(final_map); free(plaintext);
-        return NULL;
-    }
-    
-    free(plaintext);
-    *out_map_size = (long)original_size;
-    return final_map;
+    free(h); free(idx); *out_sz = m_sz; return m;
 }
 
-int calculate_sha256_raw(const char *filepath, unsigned char *output_hash) {
-    struct stat statbuf;
-    if (stat(filepath, &statbuf) != 0 || !S_ISREG(statbuf.st_mode)) return -1;
-    FILE *file = fopen(filepath, "rb");
-    if (!file) return -1;
+unsigned char* process_decryption(unsigned char* data, size_t sz, const char* pass, long* out_map_size) {
+    unsigned char *ptr = data, *end = data + sz;
+    while (ptr <= (end - 12)) { if (memcmp(ptr, "LIDECENC", 8) == 0) break; ptr++; }
+    if (ptr > end - 12) return NULL;
+    ptr += 8;
+    uint32_t encrypted_part_size; memcpy(&encrypted_part_size, ptr, 4); ptr += 4;
     
-    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
-    const EVP_MD *md = EVP_sha256();
-    EVP_DigestInit_ex(mdctx, md, NULL);
+    unsigned char salt[SALT_SIZE]; memcpy(salt, ptr, SALT_SIZE); ptr += SALT_SIZE;
+    unsigned char key[32], iv[16], derived[48];
+    PKCS5_PBKDF2_HMAC(pass, strlen(pass), salt, SALT_SIZE, 600000, EVP_sha256(), 48, derived);
+    memcpy(key, derived, 32); memcpy(iv, derived + 32, 16);
     
-    const int bufSize = 4096;
-    unsigned char buffer[bufSize];
-    size_t bytesRead = 0;
-    while ((bytesRead = fread(buffer, 1, bufSize, file))) {
-        EVP_DigestUpdate(mdctx, buffer, bytesRead);
-    }
-    unsigned int md_len;
-    EVP_DigestFinal_ex(mdctx, output_hash, &md_len);
-    EVP_MD_CTX_free(mdctx);
-    fclose(file);
-    return 0;
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
+    int ct_len = encrypted_part_size - SALT_SIZE;
+    unsigned char* pt = malloc(ct_len + 32);
+    int len, total_pt = 0;
+    if (EVP_DecryptUpdate(ctx, pt, &len, ptr, ct_len) != 1) { EVP_CIPHER_CTX_free(ctx); free(pt); return NULL; }
+    total_pt = len;
+    if (EVP_DecryptFinal_ex(ctx, pt + len, &len) != 1) { EVP_CIPHER_CTX_free(ctx); free(pt); return NULL; }
+    total_pt += len;
+    EVP_CIPHER_CTX_free(ctx);
+    
+    uint32_t orig_sz; memcpy(&orig_sz, pt, 4);
+    unsigned char* final = malloc(orig_sz); uLongf d_len = orig_sz;
+    if (uncompress(final, &d_len, pt + 4, total_pt - 4) != Z_OK) { free(final); free(pt); return NULL; }
+    free(pt); *out_map_size = (long)orig_sz; return final;
 }
 
 int main(int argc, char* argv[]) {
-    const char* map_filename = NULL;
-    const char* carrier_names[100];
-    int num_c_args = 0;
-    int opt;
-
+    const char* map_filename = NULL; const char* carrier_names[100];
+    int num_c = 0, opt;
     while ((opt = getopt(argc, argv, "m:c:")) != -1) {
         switch (opt) {
             case 'm': map_filename = optarg; break;
-            case 'c': if (num_c_args < 100) carrier_names[num_c_args++] = optarg; break;
-            default: fprintf(stderr, "Uso: %s -m <map_file> -c <carrier1> [-c <carrier2>] ...\n", argv[0]); return EXIT_FAILURE;
+            case 'c': if (num_c < 100) carrier_names[num_c++] = optarg; break;
         }
     }
-
-    if (map_filename == NULL) {
-        fprintf(stderr, "Uso: %s -m <map_file> -c <carrier1> [-c <carrier2>] ...\n", argv[0]);
-        return EXIT_FAILURE;
+    if (!map_filename) { fprintf(stderr, "Usage: %s -m <map_file> -c <carrier1>...\n", argv[0]); return 1; }
+    char *pass = getpass("Enter password: ");
+    if (!pass || strlen(pass) == 0) return 1;
+    struct stat st; if (stat(map_filename, &st) != 0) { perror("Stat failed"); return 1; }
+    FILE *f = fopen(map_filename, "rb"); unsigned char *raw = malloc(st.st_size); fread(raw, 1, st.st_size, f); fclose(f);
+    long m_sz; unsigned char* map_data = process_decryption(raw, st.st_size, pass, &m_sz);
+    if (!map_data) {
+        size_t l_sz; unsigned char* lsb = extract_lsb_robust(map_filename, pass, &l_sz);
+        if (lsb) { map_data = process_decryption(lsb, l_sz, pass, &m_sz); free(lsb); }
     }
-
-    long map_size;
-    unsigned char* map_data = decrypt_map_to_memory(map_filename, &map_size);
-    if (!map_data) return EXIT_FAILURE;
-    unsigned char* map_ptr = map_data;
-    unsigned char* map_end = map_data + map_size;
-
-    if ((map_ptr + 8) > map_end || strncmp((char*)map_ptr, "LIDECMAP", 8) != 0) { fprintf(stderr, "Erro: Arquivo de mapa invalido.\n"); free(map_data); return EXIT_FAILURE; }
-    map_ptr += 8;
-
-    uint16_t version;
-    memcpy(&version, map_ptr, 2); map_ptr += 2;
-    if (version != MAP_VERSION) { 
-        fprintf(stderr, "Erro: Versao do mapa incompativel (mapa v%u, programa v%d).\n", version, MAP_VERSION);
-        free(map_data); return EXIT_FAILURE; 
-    }
-
-    uint16_t num_carriers_from_map;
-    memcpy(&num_carriers_from_map, map_ptr, 2); map_ptr += 2;
-
-    FILE** carrier_files = malloc(num_carriers_from_map * sizeof(FILE*));
-    for (int i = 0; i < num_carriers_from_map; i++) {
-        map_ptr += SHA256_DIGEST_LENGTH; // Pula hashes por simplicidade
-        carrier_files[i] = (i < num_c_args) ? fopen(carrier_names[i], "rb") : NULL;
-    }
-
-    uint16_t num_secrets_from_map;
-    memcpy(&num_secrets_from_map, map_ptr, 2); map_ptr += 2;
-
-    FILE** output_files = malloc(num_secrets_from_map * sizeof(FILE*));
-    for (int i = 0; i < num_secrets_from_map; i++) {
-        char out_name[64];
-        sprintf(out_name, "recovered_%d.bin", i);
-        output_files[i] = fopen(out_name, "wb");
-    }
-
-    printf("--- Iniciando reconstrucao Camaleao... ---\n");
-    while (map_ptr < map_end) {
-        uint16_t sid;
-        memcpy(&sid, map_ptr, 2); map_ptr += 2;
-        uint8_t control_byte = *map_ptr++;
-        
-        FILE* out = (sid < num_secrets_from_map) ? output_files[sid] : NULL;
-
-        if (control_byte & 0x80) { // Match
-            uint16_t carrier_idx, length;
-            uint32_t offset;
-            memcpy(&carrier_idx, map_ptr, 2); map_ptr += 2;
-            memcpy(&offset, map_ptr, 4); map_ptr += 4;
-            memcpy(&length, map_ptr, 2); map_ptr += 2;
-
-            if (out && carrier_idx < num_carriers_from_map && carrier_files[carrier_idx]) {
-                unsigned char* buffer = malloc(length);
-                fseek(carrier_files[carrier_idx], offset, SEEK_SET);
-                if (fread(buffer, 1, length, carrier_files[carrier_idx]) == length) {
-                    fwrite(buffer, 1, length, out);
-                }
-                free(buffer);
+    free(raw);
+    if (!map_data) { fprintf(stderr, "Error: Map decryption failed.\n"); return 1; }
+    unsigned char *ptr = map_data;
+    if (strncmp((char*)ptr, "LIDECMAP", 8) != 0) { fprintf(stderr, "Error: Invalid map.\n"); return 1; }
+    ptr += 8;
+    uint16_t ver, n_c, n_s;
+    memcpy(&ver, ptr, 2); ptr += 2; memcpy(&n_c, ptr, 2); ptr += 2;
+    FILE** c_f = malloc(n_c * sizeof(FILE*));
+    for (int i = 0; i < n_c; i++) { ptr += 32; c_f[i] = (i < num_c) ? fopen(carrier_names[i], "rb") : NULL; }
+    memcpy(&n_s, ptr, 2); ptr += 2;
+    FILE** o_f = malloc(n_s * sizeof(FILE*));
+    for (int i = 0; i < n_s; i++) { char n[64]; sprintf(n, "recovered_%d.bin", i); o_f[i] = fopen(n, "wb"); }
+    printf("--- Reconstructing... ---\n");
+    while (ptr < map_data + m_sz) {
+        uint16_t sid; uint8_t ctrl; memcpy(&sid, ptr, 2); ptr += 2; ctrl = *ptr++;
+        FILE* out = (sid < n_s) ? o_f[sid] : NULL;
+        if (ctrl & 0x80) {
+            uint16_t ci, len; uint32_t off; memcpy(&ci, ptr, 2); ptr += 2; memcpy(&off, ptr, 4); ptr += 4; memcpy(&len, ptr, 2); ptr += 2;
+            if (out && ci < n_c && c_f[ci]) {
+                unsigned char* b = malloc(len); fseek(c_f[ci], off, SEEK_SET);
+                if (fread(b, 1, len, c_f[ci]) == len) fwrite(b, 1, len, out);
+                free(b);
             }
-        } else { // Literal
-            uint8_t literal_len = control_byte;
-            if (out) fwrite(map_ptr, 1, literal_len, out);
-            map_ptr += literal_len;
-        }
+        } else { if (out) fwrite(ptr, 1, ctrl, out); ptr += ctrl; }
     }
-
-    printf("--- Reconstrucao finalizada. Arquivos salvos como recovered_X.bin ---\n");
-
+    printf("--- Done ---\n");
     free(map_data);
-    for (int i = 0; i < num_secrets_from_map; i++) if (output_files[i]) fclose(output_files[i]);
-    for (int i = 0; i < num_carriers_from_map; i++) if (carrier_files[i]) fclose(carrier_files[i]);
-    free(output_files);
-    free(carrier_files);
-
-    return EXIT_SUCCESS;
+    for (int i = 0; i < n_s; i++) if (o_f[i]) fclose(o_f[i]);
+    for (int i = 0; i < n_c; i++) if (c_f[i]) fclose(c_f[i]);
+    return 0;
 }
