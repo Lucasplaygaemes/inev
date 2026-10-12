@@ -123,7 +123,7 @@ Scan a directory to find files that have high pattern coverage for your secret:
 
 ---
 
-## 🚀 Installation & Build
+##  Installation & Build
 
 ### Dependencies
 - **OpenSSL** (`libssl-dev`)
