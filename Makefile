@@ -6,7 +6,7 @@ ifeq ($(OS),Windows_NT)
     LDFLAGS += -L/mingw64/lib
 endif
 TARGETS = encoder decoder
-SRCS_ENCODER = source/encoder.c source/suffix_tree.c
+SRCS_ENCODER = source/encoder.c source/suffix_tree.c source/rolling_hash.c
 OBJS_ENCODER = $(SRCS_ENCODER:.c=.o)
 SRCS_DECODER = source/decoder.c
 OBJS_DECODER = $(SRCS_DECODER:.c=.o)
