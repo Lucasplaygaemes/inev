@@ -1,43 +1,26 @@
 CC = gcc
-CFLAGS  += -I/mingw64/include
-LDFLAGS += -L/mingw64/lib -lssl -lcrypto
-
-CFLAGS = -Wall -g -I./source
-
+CFLAGS  = -Wall -Wextra -O3 -march=native -g -I./source
 LDFLAGS = -lssl -lcrypto -lz
-
-# --- Targets ---
-
+ifeq ($(OS),Windows_NT)
+    CFLAGS  += -I/mingw64/include
+    LDFLAGS += -L/mingw64/lib
+endif
 TARGETS = encoder decoder
-
-# --- Sources and Objetcts ---
-
 SRCS_ENCODER = source/encoder.c source/suffix_tree.c
 OBJS_ENCODER = $(SRCS_ENCODER:.c=.o)
-
 SRCS_DECODER = source/decoder.c
 OBJS_DECODER = $(SRCS_DECODER:.c=.o)
-
-# --- Rules ---
-
+DEPS_ENCODER = $(OBJS_ENCODER:.o=.d)
+DEPS_DECODER = $(OBJS_DECODER:.o=.d)
 all: $(TARGETS)
-
 encoder: $(OBJS_ENCODER)
-	@echo "Linking the executable$@"
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
 decoder: $(OBJS_DECODER)
-	@echo "Linking the executable...$@"
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
 %.o: %.c
-	@echo "Compiling..."
-	$(CC) $(CFLAGS) -c $< -o $@ -MMD
-
-.PHONY: clean all
-
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 clean:
-	@echo "Cleaning the generated files..."
-	rm -f $(TARGETS) $(OBJS_ENCODER) $(OBJS_DECODER) $(SRCS_ENCODER:.c=.d) $(SRCS_DECODER:.c=.d)
-
+	rm -f $(TARGETS) $(OBJS_ENCODER) $(OBJS_DECODER) $(DEPS_ENCODER) $(DEPS_DECODER)
+.PHONY: clean all
+-include $(DEPS_ENCODER) $(DEPS_DECODER)
 -include $(SRCS_ENCODER:.c=.d) $(SRCS_DECODER:.c=.d)
