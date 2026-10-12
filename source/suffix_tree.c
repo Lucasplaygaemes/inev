@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include "suffix_tree.h"
 
 typedef struct Edge Edge;
@@ -167,7 +168,7 @@ void extend(SuffixTree* tree, int pos) {
 }
 
 SuffixTree* st_create(const char* text, size_t len) {
-    if (len == 0) return NULL;
+    if (len == 0 || len > (size_t)INT_MAX) return NULL;
     SuffixTree* tree = (SuffixTree*)malloc(sizeof(SuffixTree));
     if (!tree) return NULL;
     memset(tree, 0, sizeof(SuffixTree));
@@ -193,24 +194,64 @@ SuffixTree* st_create(const char* text, size_t len) {
     return tree;
 }
 
-int st_find_longest_match(SuffixTree* tree, const char* query, size_t query_len) {
-    if (!tree || !tree->root) return 0;
+static int get_any_leaf_path_len(Node* node, int current_depth, int text_len) {
+    while (node && node->edges_head) {
+        Edge* e = node->edges_head;
+        int elen = (e->end && *(e->end) != -1)
+                       ? (*(e->end) - e->start + 1)
+                       : (text_len - e->start);
+        if (elen < 0) break;
+        current_depth += elen;
+        node = e->child;
+    }
+    return current_depth;
+}
+
+int st_find_match_with_offset(SuffixTree* tree, const char* query, size_t query_len, size_t* out_text_offset) {
+    if (!tree || !tree->root || query_len == 0) {
+        if (out_text_offset) *out_text_offset = 0;
+        return 0;
+    }
+    
     Node* current_node = tree->root;
     int match_len = 0;
+    int current_depth = 0;
+    Node* last_node = tree->root;
+
     for (size_t i = 0; i < query_len; ) {
         Edge* edge = find_edge(current_node, (unsigned char)query[i]);
         if (edge == NULL) break;
 
         int edge_len = edge_length(edge, (int)tree->text_len - 1);
+
         for (int j = 0; j < edge_len && i < query_len; j++, i++, match_len++) {
             if (query[i] != tree->text[edge->start + j]) {
+                if (out_text_offset) {
+                    int total_leaf_len = get_any_leaf_path_len(edge->child, current_depth + edge_len, (int)tree->text_len);
+                    *out_text_offset = (size_t)(tree->text_len - total_leaf_len);
+                }
                 return match_len;
             }
         }
+
+        current_depth += edge_len;
+        last_node = edge->child;
         current_node = edge->child;
         if (!current_node) break;
     }
+
+    if (out_text_offset && match_len > 0) {
+        int total_leaf_len = get_any_leaf_path_len(last_node, current_depth, (int)tree->text_len);
+        *out_text_offset = (size_t)(tree->text_len - total_leaf_len);
+    } else if (out_text_offset) {
+        *out_text_offset = 0;
+    }
+
     return match_len;
+}
+
+int st_find_longest_match(SuffixTree* tree, const char* query, size_t query_len) {
+    return st_find_match_with_offset(tree, query, query_len, NULL);
 }
 
 void st_free(SuffixTree* tree) {
